@@ -17,19 +17,25 @@ public:
     /*
     * Errors
     */
-
+    double cte;		// current error (last we saw)
+    double int_cte;     // integrated error i.e. sum of previous errors
     /*
     * Coefficients
     */
-
+    double Kp; // proportional coefficient
+    double Ki; // integral coefficient
+    double Kd; // differential coefficient
+    double steering_angle; // the current calculated action
     /*
     * Output limits
     */
-  
+    double output_lim_max;
+    double output_lim_min;
+
     /*
     * Delta time
     */
-
+    double delta_time;
     /*
     * Constructor
     */
