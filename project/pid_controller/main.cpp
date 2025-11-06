@@ -231,7 +231,7 @@ int main ()
 
   PID pid_steer = PID();
   double max_steer = 1.2; // 1.2 as per instructions
-  pid_steer.Init(0.5, 0.0, 0.0, max_steer, -max_steer); 
+  pid_steer.Init(0.25, 0.01, 0.25, max_steer, -max_steer); 
   // initialize pid throttle
   /**
   * TODO (Step 1): create pid (pid_throttle) for throttle command and initialize values
@@ -240,7 +240,7 @@ int main ()
   PID pid_throttle = PID();
   double max_throttle = 1; // should be in [-1,1] 
   double max_break = -1; // should be in [-1,1]
-  pid_throttle.Init(0.5, 0.5, 0.5, max_throttle, max_break); 
+  pid_throttle.Init(0.25, 0.05, 0.0, max_throttle, max_break); 
 
   h.onMessage([&pid_steer, &pid_throttle, &new_delta_time, &timer, &prev_timer, &i, &prev_timer](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode)
   {
@@ -356,12 +356,14 @@ int main ()
           * TODO (step 2): compute the throttle error (error_throttle) from the position and the desired speed
           **/
           // modify the following line for step 2
-          double desired_speed = v_points.back(); // last point of planner contains goal speed / desired speed
+          //double desired_speed = v_points.back(); // last point of planner contains goal speed / desired speed
+	  double desired_speed = v_points.empty() ? 3.0 : v_points.back();
+	  if (desired_speed < 0.3) desired_speed = 2.0;
 	  error_throttle = desired_speed - velocity; 
 
 
-          double throttle_output;
-          double brake_output;
+          double throttle_output = 0.0;
+          double brake_output = 0.0;
 
           /**
           * TODO (step 2): uncomment these lines
@@ -369,6 +371,12 @@ int main ()
 //           // Compute control to apply
           pid_throttle.UpdateError(error_throttle);
           double throttle = pid_throttle.TotalError();
+
+	  std::cout << "[Throttle] v_des=" << desired_speed
+          	    << " v=" << velocity
+          	    << " e=" << error_throttle
+          	    << " cmd=" << throttle << std::endl;
+
 
 //           // Adapt the negative throttle to break
           if (throttle > 0.0) {
