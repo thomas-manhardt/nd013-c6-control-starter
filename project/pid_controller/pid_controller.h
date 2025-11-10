@@ -17,20 +17,28 @@ public:
     /*
     * Errors
     */
-    double cte;		// current error (last we saw)
-    double int_cte;     // integrated error i.e. sum of previous errors
+    double cte;        // current (last) error
+    double int_cte;    // integrated error
+    double prev_cte;   // previous error (for derivative)
+    double diff_cte;   // filtered derivative term (raw derivative low-pass)
     /*
     * Coefficients
     */
-    double Kp; // proportional coefficient
-    double Ki; // integral coefficient
-    double Kd; // differential coefficient
-    double steering_angle; // the current calculated action
+    double Kp;
+    double Ki;
+    double Kd;
+    double steering_angle; // current (raw) control before clamp
     /*
     * Output limits
     */
     double output_lim_max;
     double output_lim_min;
+
+    /* Integral clamp */
+    double I_MAX; // absolute limit for integral term accumulation
+
+    /* Saturation flag */
+    bool output_saturated;
 
     /*
     * Delta time
@@ -68,5 +76,6 @@ public:
 };
 
 #endif //PID_CONTROLLER_H
+
 
 

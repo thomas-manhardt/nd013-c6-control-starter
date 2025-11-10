@@ -16,54 +16,71 @@ PID::PID() {}
 PID::~PID() {}
 
 void PID::Init(double Kpi, double Kii, double Kdi, double output_lim_maxi, double output_lim_mini) {
-   /**
-   * TODO: Initialize PID coefficients (and errors, if needed)
-   **/
-   // pid coefficients
-   this->Kp = Kpi;
-   this->Ki = Kii;
-   this->Kd = Kdi;
-   // boundary conditions
-   this->output_lim_max = output_lim_maxi;
-   this->output_lim_min = output_lim_mini;
-   // errors
-   this->cte = 0.0; // current error
-   this->int_cte = 0.0; // integral error
-   this->delta_time = 0.0; // time delta
-   this->steering_angle = 0.0;
+   // Initialize PID coefficients
+   Kp = Kpi;
+   Ki = Kii;
+   Kd = Kdi;
+   // limits
+   output_lim_max = output_lim_maxi;
+   output_lim_min = output_lim_mini;
+   // state
+   cte = 0.0;
+   prev_cte = 0.0;
+   int_cte = 0.0;
+   diff_cte = 0.0; // filtered derivative
+   steering_angle = 0.0;
+   delta_time = 0.0;
+   I_MAX = 10.0; // integral clamp limit (tunable)
+   output_saturated = false;
 }
 
+void PID::UpdateError(double current_cte) {
+   // Guard: need a reasonable dt to compute derivative
+   const double min_dt = 1e-3;
+   double dt = (delta_time < min_dt) ? min_dt : delta_time;
 
-void PID::UpdateError(double cte) {
-   /**
-   * TODO: Update PID errors based on cte.
-   steer = -tau_p  *cte - tau_d*  diff_cte - tau_i * int_cte
-   **/
-   const double eps = 1e-9;
-   if (this->delta_time < eps) return; // don't do anything if delta time is too small
+   // Proportional term uses current_cte directly
+   double p_term = Kp * current_cte;
 
-   double prop_term = this->Kp * cte; // proportional term
-   double diff_term = this->Kd * (cte - this->cte) / this->delta_time; // differential term
-   this->int_cte += cte * this->delta_time;
-   double int_term = this->Ki * this->int_cte; // integral term
-   this->steering_angle = - prop_term - diff_term - int_term;
-   this->cte = cte; // save cte for next computation
+   // Raw derivative (risk of noise); apply simple low-pass filter
+   double raw_d = (current_cte - prev_cte) / dt;
+   // Exponential smoothing factor (alpha). Smaller -> more smoothing.
+   const double alpha = 0.1;
+   diff_cte = (1.0 - alpha) * diff_cte + alpha * raw_d;
+   double d_term = Kd * diff_cte;
+
+   // Conditional integral accumulation (anti-windup)
+   // Only integrate if not saturated OR error drives output back toward range.
+   bool will_reduce_saturation = (output_saturated && (
+         (steering_angle >= output_lim_max && current_cte < 0) ||
+         (steering_angle <= output_lim_min && current_cte > 0)));
+   if (!output_saturated || will_reduce_saturation) {
+       int_cte += current_cte * dt;
+       // Clamp integral
+       if (int_cte > I_MAX) int_cte = I_MAX;
+       if (int_cte < -I_MAX) int_cte = -I_MAX;
+   }
+   double i_term = Ki * int_cte;
+
+   // Combine (negative sign for standard "corrective" action)
+   steering_angle = - (p_term + d_term + i_term);
+
+   // Update previous error
+   prev_cte = current_cte;
+   cte = current_cte;
 }
 
 double PID::TotalError() {
-   /**
-   * TODO: Calculate and return the total error
-    * The code should return a value in the interval [output_lim_mini, output_lim_maxi]
-   */
-    double control = this->steering_angle;
-    if (control < this->output_lim_min) control = output_lim_min;
-    if (control > this->output_lim_max) control = output_lim_max;
+    // Clamp output and mark saturation
+    double control = steering_angle;
+    if (control < output_lim_min) control = output_lim_min;
+    if (control > output_lim_max) control = output_lim_max;
+    output_saturated = (control <= output_lim_min + 1e-9) || (control >= output_lim_max - 1e-9);
     return control;
 }
 
 double PID::UpdateDeltaTime(double new_delta_time) {
-   /**
-   * TODO: Update the delta time with new value
-   */
-   this->delta_time = new_delta_time;
+   delta_time = new_delta_time;
+   return delta_time;
 }
+
